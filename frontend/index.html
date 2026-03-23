@@ -7,25 +7,38 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:#0a0b10;color:#e2e8f0;font-family:'Share Tech Mono',monospace;overflow:hidden;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;}
-canvas{display:block;cursor:none;}
+canvas{display:block;cursor:none;filter: drop-shadow(0 0 20px rgba(0,0,0,0.5));}
 #ui{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;}
-#hud{position:absolute;top:20px;left:50%;transform:translateX(-50%);display:flex;gap:30px;background:rgba(15,17,26,0.9);padding:15px 40px;border-radius:12px;border:1px solid #00f2ff;display:none;}
-.hud-val{font-family:'Orbitron';font-size:24px;color:#fff;}
-#bottom-ui{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:none;gap:40px;}
-.bar-bg{width:200px;height:14px;background:#050505;border:1px solid #333;padding:2px;}
-.bar-fill{height:100%;background:#00f2ff;transition:0.3s;}
-.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0b10;pointer-events:all;}
-.btn{font-family:'Orbitron';font-size:18px;background:#00f2ff;padding:20px 60px;cursor:pointer;border:none;clip-path:polygon(10% 0,100% 0,90% 100%,0% 100%);}
-#crosshair{position:absolute;width:20px;height:20px;border:2px solid #00f2ff;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;}
+#hud{position:absolute;top:20px;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:30px;background:rgba(15, 17, 26, 0.85);backdrop-filter: blur(10px);padding:15px 40px;border-radius:12px;border:1px solid rgba(0, 242, 255, 0.3);display:none;}
+.hud-block{display:flex;flex-direction:column;gap:2px;align-items:center;}
+.hud-label{font-size:10px;color:#00f2ff;letter-spacing:3px;}
+.hud-val{font-family:'Orbitron',monospace;font-size:24px;color:#fff;}
+#bottom-ui {position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:none;gap:40px;background:rgba(0,0,0,0.8);padding:15px 40px;border-radius:12px;border:1px solid rgba(255, 0, 110, 0.3);}
+.bar-bg{width:180px;height:14px;background:#050505;border:1px solid #333;border-radius:3px;padding:2px;overflow:hidden;}
+.bar-fill{height:100%;transition:width 0.3s cubic-bezier(0.17, 0.67, 0.83, 0.67);}
+#health-fill{background:linear-gradient(90deg, #ff006e, #ff70a6);box-shadow: 0 0 15px rgba(255, 0, 110, 0.6);}
+#ammo-fill{background:linear-gradient(90deg, #00f2ff, #70f3ff);box-shadow: 0 0 15px rgba(0, 242, 255, 0.6);}
+#wave-banner{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);font-family:'Orbitron',monospace;font-size:72px;color:#fff;text-shadow:0 0 30px #00f2ff;opacity:0;transition:0.5s;pointer-events:none;}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:30px;background:radial-gradient(circle, rgba(20,22,33,0.95) 0%, rgba(5,5,10,1) 100%);pointer-events:all;}
+.btn{font-family:'Orbitron',monospace;font-size:16px;letter-spacing:5px;background:#00f2ff;color:#000;border:none;padding:20px 70px;cursor:pointer;transition:0.3s;font-weight:bold;clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%);}
+#crosshair{position:absolute;width:24px;height:24px;border: 2px solid #00f2ff; border-radius: 50%; transform:translate(-50%,-50%);pointer-events:none;box-shadow: 0 0 15px #00f2ff;}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-    <div id="hud"><div class="hud-val" id="h-score">SCORE: 0</div><div class="hud-val" id="h-wave">WAVE: 1</div></div>
-    <div id="bottom-ui"><div class="bar-bg"><div id="hp-fill" class="bar-fill" style="width:100%; background:#ff006e;"></div></div></div>
+    <div id="hud">
+        <div class="hud-block"><div class="hud-label">SCORE</div><div class="hud-val" id="h-score">0</div></div>
+        <div class="hud-block"><div class="hud-label">WAVE</div><div class="hud-val" id="h-wave">1</div></div>
+    </div>
+    <div id="bottom-ui">
+        <div class="bar-bg"><div class="bar-fill" id="health-fill" style="width:100%;"></div></div>
+        <div class="bar-bg"><div class="bar-fill" id="ammo-fill" style="width:100%;"></div></div>
+    </div>
+    <div id="wave-banner"></div>
+    <div id="crosshair"></div>
     <div class="overlay" id="screen-start">
-        <h1 style="font-family:'Orbitron'; font-size:60px; color:#00f2ff; margin-bottom:20px;">DELTA-RO</h1>
+        <h1 style="font-family:'Orbitron'; font-size:60px; color:#00f2ff;">DELTA-RO</h1>
         <button class="btn" onclick="startGame()">START ENGINE</button>
     </div>
 </div>
@@ -33,8 +46,33 @@ canvas{display:block;cursor:none;}
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-const MW=30, MH=22, TILE=40;
-let W, H, offX, offY;
+const TILE = 40, PSPEED = 3.8, BSPEED = 14, MAX_AMMO = 40, RELOAD_F = 90;
+const MW = 30, MH = 22;
+
+// FULL ORIGINAL MAP ARRAY
+const MAP = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,2,2,0,0,0,2,0,0,0,0,0,0,0,0,0,2,0,0,0,0,2,2,0,0,0,0,1],
+    [1,0,0,2,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,2,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,1],
+    [1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,3,3,0,0,0,0,0,0,0,3,3,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+    [1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,3,3,0,0,0,0,0,0,0,3,3,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+    [1,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,2,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,2,0,0,0,0,1],
+    [1,0,0,2,2,0,0,0,2,0,0,0,0,0,0,0,0,0,2,0,0,0,0,2,2,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+];
 
 const imgs = {
     bmw: new Image(),
@@ -45,6 +83,7 @@ imgs.rivals[0].src = 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/
 imgs.rivals[1].src = 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/Audi_logo_detail.svg/2048px-Audi_logo_detail.svg.png';
 imgs.rivals[2].src = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Volkswagen_logo_2019.svg/2048px-Volkswagen_logo_2019.svg.png';
 
+let W, H, offX, offY;
 function resize() {
     W = canvas.width = window.innerWidth;
     H = canvas.height = window.innerHeight;
@@ -53,20 +92,27 @@ function resize() {
 }
 window.onresize = resize; resize();
 
-let p = {x:600, y:440, r:18, hp:100, angle:0};
-let enemies = [], keys = {}, mouse = {x:0, y:0};
+let state = { p:{x:600, y:440, r:18, hp:100, ammo:MAX_AMMO, angle:0, scd:0, rl:0}, enemies:[], bullets:[], wave:1, score:0 };
+let keys = {}, mouse = {x:0, y:0, down:false};
 
 function startGame() {
     document.getElementById('screen-start').style.display='none';
     document.getElementById('hud').style.display='flex';
     document.getElementById('bottom-ui').style.display='flex';
-    for(let i=0; i<6; i++) spawn();
+    spawnWave();
     loop();
 }
 
-function spawn() {
-    enemies.push({x:Math.random()*MW*TILE, y:Math.random()*MH*TILE, r:18, img:imgs.rivals[Math.floor(Math.random()*3)], angle:0});
+function spawnWave() {
+    for(let i=0; i<state.wave*3; i++) {
+        state.enemies.push({x:Math.random()*MW*TILE, y:Math.random()*MH*TILE, r:18, img:imgs.rivals[Math.floor(Math.random()*3)], hp:2, angle:0, scd:0});
+    }
 }
+
+const solid = (x,y) => {
+    const tx=Math.floor(x/TILE), ty=Math.floor(y/TILE);
+    return MAP[ty] && (MAP[ty][tx] === 1 || MAP[ty][tx] === 2);
+};
 
 function loop() {
     update();
@@ -75,13 +121,41 @@ function loop() {
 }
 
 function update() {
-    if(keys['w']) p.y -= 4; if(keys['s']) p.y += 4;
-    if(keys['a']) p.x -= 4; if(keys['d']) p.x += 4;
+    const p = state.p;
     p.angle = Math.atan2(mouse.y - (p.y + offY), mouse.x - (p.x + offX));
-    enemies.forEach(e => {
+    
+    // MOVEMENT + COLLISION
+    let nx = p.x, ny = p.y;
+    if(keys['w']) ny -= PSPEED; if(keys['s']) ny += PSPEED;
+    if(keys['a']) nx -= PSPEED; if(keys['d']) nx += PSPEED;
+    if(!solid(nx, p.y)) p.x = nx;
+    if(!solid(p.x, ny)) p.y = ny;
+
+    // SHOOTING
+    if(p.scd > 0) p.scd--;
+    if(mouse.down && p.scd === 0 && p.ammo > 0) {
+        state.bullets.push({x:p.x, y:p.y, vx:Math.cos(p.angle)*BSPEED, vy:Math.sin(p.angle)*BSPEED, mine:true});
+        p.ammo--; p.scd = 10;
+        document.getElementById('ammo-fill').style.width = (p.ammo/MAX_AMMO*100)+'%';
+    }
+
+    state.bullets = state.bullets.filter(b => {
+        b.x += b.vx; b.y += b.vy;
+        if(solid(b.x, b.y)) return false;
+        // Hit detection
+        if(b.mine) {
+            for(let e of state.enemies) {
+                if(Math.hypot(b.x-e.x, b.y-e.y) < e.r) { e.hp--; return false; }
+            }
+        }
+        return true;
+    });
+
+    state.enemies = state.enemies.filter(e => {
         let dx = p.x-e.x, dy = p.y-e.y;
         e.angle = Math.atan2(dy, dx);
-        e.x += Math.cos(e.angle)*2; e.y += Math.sin(e.angle)*2;
+        e.x += Math.cos(e.angle)*1.5; e.y += Math.sin(e.angle)*1.5;
+        return e.hp > 0;
     });
 }
 
@@ -89,35 +163,42 @@ function draw() {
     ctx.fillStyle = '#0a0b10'; ctx.fillRect(0,0,W,H);
     ctx.save(); ctx.translate(offX, offY);
 
-    // GRID
-    ctx.strokeStyle = '#1a1d2e';
-    for(let i=0; i<=MW*TILE; i+=TILE) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,MH*TILE); ctx.stroke(); }
-    for(let i=0; i<=MH*TILE; i+=TILE) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(MW*TILE,i); ctx.stroke(); }
+    // DRAW MAP
+    for(let r=0; r<MH; r++) for(let c=0; c<MW; c++) {
+        if(MAP[r][c] === 1) { ctx.fillStyle='#1e2235'; ctx.fillRect(c*TILE, r*TILE, TILE, TILE); }
+    }
 
-    // RIVALS
-    enemies.forEach(e => {
+    // DRAW RIVALS
+    state.enemies.forEach(e => {
         ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle + Math.PI/2);
         if(e.img.complete) ctx.drawImage(e.img, -e.r, -e.r, e.r*2, e.r*2);
         ctx.restore();
     });
 
-    // BMW
-    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + Math.PI/2);
+    // DRAW BMW
+    ctx.save(); ctx.translate(state.p.x, state.p.y); ctx.rotate(state.p.angle + Math.PI/2);
     ctx.shadowBlur = 20; ctx.shadowColor = '#00f2ff';
-    if(imgs.bmw.complete) ctx.drawImage(imgs.bmw, -p.r, -p.r, p.r*2, p.r*2);
+    if(imgs.bmw.complete) ctx.drawImage(imgs.bmw, -state.p.r, -state.p.r, state.p.r*2, state.p.r*2);
     ctx.restore();
+
+    // BULLETS
+    state.bullets.forEach(b => {
+        ctx.fillStyle = b.mine ? '#00f2ff' : '#ff006e';
+        ctx.fillRect(b.x-2, b.y-2, 4, 4);
+    });
 
     ctx.restore();
 }
 
 window.onkeydown = e => keys[e.key.toLowerCase()] = true;
 window.onkeyup = e => keys[e.key.toLowerCase()] = false;
+window.onmousedown = () => mouse.down = true;
+window.onmouseup = () => mouse.down = false;
 window.onmousemove = e => { 
     mouse.x = e.clientX; mouse.y = e.clientY; 
     document.getElementById('crosshair').style.left = mouse.x+'px';
     document.getElementById('crosshair').style.top = mouse.y+'px';
 };
 </script>
-<div id="crosshair"></div>
 </body>
 </html>
