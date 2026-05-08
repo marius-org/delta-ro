@@ -56,21 +56,18 @@ metadata:
   name: delta-ro-service
   namespace: delta-ro
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: delta-ro
   ports:
-    - port: 8000
+    - port: 80
       targetPort: 8000
-      nodePort: 32529
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: delta-ro-ingress
   namespace: delta-ro
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   ingressClassName: nginx
   rules:
@@ -83,4 +80,4 @@ spec:
               service:
                 name: delta-ro-service
                 port:
-                  number: 8000
+                  number: 80
