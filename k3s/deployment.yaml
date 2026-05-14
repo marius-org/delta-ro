@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: delta-ro
-          image: mariuseu/delta-ro:12
+          image: mariuseu/delta-ro:13
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
